@@ -217,8 +217,8 @@ class ParserPool(object):
         self.lines.join()
 
 
-def process_log_files(log_files, concurrency=None, local_emails=None):
-    print("Starting Log parsing for: {}".format(reduce(lambda x, y: "{}, {}".format(x,y), log_files)))
+def process_log_files(log_files, concurrency=None, local_emails=None, running_event=None):
+    print("Starting log parsing for: {}".format(reduce(lambda x, y: "{}, {}".format(x,y), log_files)))
 
     # handle local_emails
     global local_addresses_re
@@ -249,7 +249,9 @@ def process_log_files(log_files, concurrency=None, local_emails=None):
     else:
         reader = fileinput.input(log_files)
 
-    for line in reader:
+    for line in reader:  # note that fileinput will not react to running_event.clear()
+        if running_event is not None and not running_event.is_set():
+            break
         try:
             parser_pool.add_line(line.strip('\n'), block=not reader.isstdin())
         except Full:
@@ -257,3 +259,5 @@ def process_log_files(log_files, concurrency=None, local_emails=None):
             time.sleep(0.1)
 
     parser_pool.join()
+    print("Finished log parsing")
+

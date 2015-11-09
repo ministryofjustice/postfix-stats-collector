@@ -9,7 +9,7 @@ from statsd.defaults.env import statsd
 
 logger = logging.getLogger(__name__)
 
-STATSD_DELAY = int(os.environ.get("STATSD_DELAY", 10))
+STATSD_DELAY = int(os.environ.get("STATSD_DELAY", 1))
 
 QUEUES = ["maildrop",
           "hold",
@@ -53,45 +53,52 @@ def get_qshape_stats(limit_top_domains=0):
     :return: list of stats [(key, value),...], where key is: "postfix.qshape.{queue}.{domain}.{bucket}"
     """
     t0 = time.time()
-    for queue in QUEUES:
-        # iterate on non empty lines from qshape output
-        logger.debug("working on qshape queue: {}".format(queue))
-        lines = ifilter(lambda x: x,
-                        subprocess.check_output(['/usr/sbin/qshape', '-n', str(limit_top_domains), '-b', '12', queue]).splitlines())
-        logger.debug("qshape output: {}".format(lines))
-        header_line = lines.next().strip()
-        headers = header_line.split()
-        assert headers[0] == 'T'
-        headers = headers[1:]
-        for line in lines:
-            values = line.split()
-            domain = values[0].lower()  # 1st entry is always TOTAL
-            total_sum = int(values[1])
-            yield ("postfix.qshape.{queue}.{domain}.{bucket}".format(queue=queue, domain=domain, bucket='sum'), int(total_sum))
+    try:
+        for queue in QUEUES:
+            # iterate on non empty lines from qshape output
+            logger.debug("working on qshape queue: {}".format(queue))
+            lines = ifilter(lambda x: x,
+                            subprocess.check_output(['/usr/sbin/qshape', '-n', str(limit_top_domains), '-b', '12', queue]).splitlines())
+            logger.debug("qshape output: {}".format(lines))
+            header_line = lines.next().strip()
+            headers = header_line.split()
+            assert headers[0] == 'T'
+            headers = headers[1:]
+            for line in lines:
+                values = line.split()
+                domain = values[0].lower()  # 1st entry is always TOTAL
+                total_sum = int(values[1])
+                yield ("postfix.qshape.{queue}.{domain}.{bucket}".format(queue=queue, domain=domain, bucket='sum'), int(total_sum))
 
-            values = values[2:]  # get rid of domain and sum
+                values = values[2:]  # get rid of domain and sum
 
-            # get from:  0  1  2  1  0 10 0 0
-            # to:       14 13 11 10 10  0 0
-            values_inverted_summed = values  # let's initiate the size
-            last_value = total_sum
-            for i in range(len(values)):
-                last_value -= int(values[i])
-                values_inverted_summed[i] = last_value
+                # get from:  0  1  2  1  0 10 0 0
+                # to:       14 13 11 10 10  0 0
+                values_inverted_summed = values  # let's initiate the size
+                last_value = total_sum
+                for i in range(len(values)):
+                    last_value -= int(values[i])
+                    values_inverted_summed[i] = last_value
 
-            domain = domain.replace(".", "_")  # we don't want to create tree from domain name so "." are forbidden
-            # we don't report 5120+ value as it does not add any value
-            # it's always zero as we deliver everything before the nd of times
-            for i in range(len(headers)-1):
-                bucket = headers[i]
-                value = values_inverted_summed[i]  # skip the title of the row
-                yield ("postfix.qshape.{queue}.{domain}.{bucket}".format(queue=queue, domain=domain, bucket=bucket), value)
+                domain = domain.replace(".", "_")  # we don't want to create tree from domain name so "." are forbidden
+                # we don't report 5120+ value as it does not add any value
+                # it's always zero as we deliver everything before the nd of times
+                for i in range(len(headers)-1):
+                    bucket = headers[i]
+                    value = values_inverted_summed[i]  # skip the title of the row
+                    yield ("postfix.qshape.{queue}.{domain}.{bucket}".format(queue=queue, domain=domain, bucket=bucket), value)
+    except OSError as e:
+        logger.error("Skipping qshape due to execution error: {}".format(e))
     t1 = time.time()
     yield "postfix.qshape.processing_time", t1-t0
 
 
-def process_qshape():
-    running = True
+def process_qshape(qshape_run_once=False, running_event=None):
+    """
+    runs the processign loop as log as running_event is set or undefined
+    :param running_event: Event or None
+    :return: None
+    """
     print("Starting qshape processing")
 
     def report_stats():
@@ -100,7 +107,9 @@ def process_qshape():
                 pipe.incr(stat, value)
 
     report_stats()  # report current metrics and schedule them to the future
-    schedule.every(STATSD_DELAY).seconds.do(report_stats)
-    while running:
-        schedule.run_pending()
-        time.sleep(0.1)
+    if not qshape_run_once:
+        schedule.every(STATSD_DELAY).seconds.do(report_stats)
+        while running_event is None or running_event.is_set():
+            schedule.run_pending()
+            time.sleep(0.1)
+    print("Finished qshape processing")

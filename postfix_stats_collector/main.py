@@ -7,11 +7,8 @@ STATSD_PREFIX=None
 STATSD_MAXUDPSIZE=512
 """
 
-from gevent import monkey
-monkey.patch_all()
-
-import signal
 import sys
+import time
 import argparse
 import threading
 import logging
@@ -48,13 +45,7 @@ def argparse_maker():
     return parser
 
 
-def signal_handler(signal, frame):
-    print('You pressed Ctrl+C!')
-    sys.exit(0)
-    #TODO: signall all threads that it's time to die
-
-
-def processor(log_files, concurrency=2, local_emails=None, skip_qshape=False, skip_logparser=False):
+def processor(log_files, concurrency=2, local_emails=None, skip_qshape=False, skip_logparser=False, qshape_run_once=False):
     """
     initiate all stats processors
     :param log_files:
@@ -62,22 +53,41 @@ def processor(log_files, concurrency=2, local_emails=None, skip_qshape=False, sk
     :param local_emails:
     :return:
     """
+    running_event = threading.Event()
+    running_event.set()
+
+    # def signal_handler(signal, frame):
+    #     print('Attempting to close workers')
+    #     running_event.clear()
+    #     sys.exit(0)
+    # signal.signal(signal.SIGINT, signal_handler)
+    print('Press Ctrl+C to exit')
+
+    partial_process_qshape = partial(process_qshape, qshape_run_once)
     partial_process_log_files = partial(process_log_files, log_files, concurrency, local_emails)
     tasks = []
     if not skip_qshape:
-        tasks.append(process_qshape)
+        tasks.append(partial_process_qshape)
     if not skip_logparser:
         tasks.append(partial_process_log_files)
 
     threads = []
     for task in tasks:
-        t = threading.Thread(target=task)
+        t = threading.Thread(target=task, args=(running_event,))
+        t.daemon = True
         t.start()
         threads.append(t)
 
-    for t in threads:
-        t.join()
-
+    # loop while any thread is running
+    while True:
+        try:
+            for t in threads:
+                t.join(0.1)
+        except KeyboardInterrupt:
+            print('Attempting to close workers')
+            running_event.clear()
+            time.sleep(1)
+            sys.exit(0)
 
 def main():
     parser = argparse_maker()
@@ -96,11 +106,13 @@ def main():
     elif args.verbosity >= 2:
         logging.basicConfig(level=logging.DEBUG)
 
-    # signal.signal(signal.SIGINT, signal_handler)
-    # print('Press Ctrl+C to exit')
+    if args.log_files[0] is '-':
+        qshape_run_once = False
+    else:
+        qshape_run_once = True
 
     processor(log_files=args.log_files, concurrency=args.concurrency, local_emails=args.local_emails,
-              skip_qshape=args.skip_qshape, skip_logparser=args.skip_logparser)
+              skip_qshape=args.skip_qshape, skip_logparser=args.skip_logparser, qshape_run_once=qshape_run_once)
 
 
 if __name__ == '__main__':

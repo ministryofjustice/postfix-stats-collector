@@ -27,3 +27,4 @@ TODO
 ----
 - syslog configuraiton examples
 - single ctrl+c should kill it
+- when log parser finishes, it should ask qshape to finish as well
