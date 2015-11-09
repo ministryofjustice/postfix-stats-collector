@@ -16,14 +16,11 @@ STATIC_QSHAPE = """
                   example.com  7  0  3  0  2  0   0   0   2    0    0    0     0
 """
 
-STATIC_LOG = """
-"""
-
 mock_check_output = mock.Mock(side_effect=lambda x: STATIC_QSHAPE)
 
 
 class TestQshapeParser(unittest.TestCase):
-    @mock.patch("subprocess.check_output", mock_check_output)
+    @mock.patch('subprocess.check_output', mock_check_output)
     def test_parser(self):
         self.assertIn('TOTAL', mock_check_output([]))
 
@@ -53,7 +50,7 @@ class TestLogParser(unittest.TestCase):
             statsd_data[k] += v
         statsd_mock.incr.side_effect = statsd_mock_incr
 
-        logreader = fileinput.input("mail.log")
+        logreader = fileinput.input('tests.mail.log')
         parser_pool = ParserPool(10)
         for line in logreader:
             try:
