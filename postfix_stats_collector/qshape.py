@@ -1,8 +1,22 @@
+#!/usr/bin/env python
+"""
+Executes postfix `qshape` on every queue and ships it's output to StatsD.
+Supported enviroment variables and their respective defaults:
+STATSD_HOST=localhost
+STATSD_PORT=8125
+STATSD_PREFIX=None
+STATSD_MAXUDPSIZE=512
+"""
+
 import os
 import time
 import schedule
 import subprocess
 import logging
+import argparse
+import signal
+import threading
+from postfix_stats_collector.common import log_init
 from itertools import ifilter
 
 from statsd.defaults.env import statsd
@@ -93,7 +107,7 @@ def get_qshape_stats(limit_top_domains=0):
     yield "postfix.qshape.processing_time", t1-t0
 
 
-def process_qshape(qshape_run_once=False, running_event=None):
+def process(run_once=False):
     """
     runs the processign loop as log as running_event is set or undefined
     :param running_event: Event or None
@@ -101,15 +115,50 @@ def process_qshape(qshape_run_once=False, running_event=None):
     """
     print("Starting qshape processing")
 
+    # handle ctrl+c
+    print('Press Ctrl+C to exit')
+    running_event = threading.Event()
+    running_event.set()
+    def signal_handler(signal, frame):
+        print('Attempting to close workers')
+        running_event.clear()
+    signal.signal(signal.SIGINT, signal_handler)
+
     def report_stats():
         with statsd.pipeline() as pipe:
             for stat, value in get_qshape_stats():
                 pipe.incr(stat, value)
 
     report_stats()  # report current metrics and schedule them to the future
-    if not qshape_run_once:
+    if not run_once:
         schedule.every(STATSD_DELAY).seconds.do(report_stats)
-        while running_event is None or running_event.is_set():
+        while running_event.is_set():
             schedule.run_pending()
             time.sleep(0.1)
     print("Finished qshape processing")
+
+
+def argparse_maker():
+    """
+    :return: argparse object
+    """
+    parser = argparse.ArgumentParser(description=__doc__,
+                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument("-v", "--verbose", dest="verbosity", default=0, action="count",
+                        help="-v for a little info, -vv for debugging")
+    parser.add_argument("-o", "--once", dest="run_once", default=False, action="store_true",
+                        help="Run once")
+    return parser
+
+
+def main():
+    parser = argparse_maker()
+    args = parser.parse_args()
+    assert args.verbosity is not None
+    assert args.run_once is not None
+    log_init(args.verbosity)
+    process(run_once=args.run_once)
+
+
+if __name__ == '__main__':
+    main()

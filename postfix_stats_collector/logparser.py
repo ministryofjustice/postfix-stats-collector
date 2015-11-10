@@ -1,8 +1,21 @@
+#!/usr/bin/env python
+"""
+Processes postfix logs and reports metrics to StatsD.
+Supported enviroment variables and their respective defaults:
+STATSD_HOST=localhost
+STATSD_PORT=8125
+STATSD_PREFIX=None
+STATSD_MAXUDPSIZE=512
+"""
 import re
 import sys
 import time
 import logging
 import fileinput
+import argparse
+import signal
+import multiprocessing
+from postfix_stats_collector.common import log_init
 from collections import defaultdict, Iterator
 from Queue import Queue, Full
 from threading import Thread, Lock
@@ -217,8 +230,9 @@ class ParserPool(object):
         self.lines.join()
 
 
-def process_log_files(log_files, concurrency=None, local_emails=None, running_event=None):
+def process(log_files, concurrency=None, local_emails=None):
     print("Starting log parsing for: {}".format(reduce(lambda x, y: "{}, {}".format(x,y), log_files)))
+    print('Press Ctrl+C to exit')
 
     # handle local_emails
     global local_addresses_re
@@ -239,7 +253,7 @@ def process_log_files(log_files, concurrency=None, local_emails=None, running_ev
     else:
         local_addresses_re = re.compile(r'(?!)')
 
-    # initiate handlers
+    # register all handlers
     register_handlers()
 
     # kick parser
@@ -249,9 +263,8 @@ def process_log_files(log_files, concurrency=None, local_emails=None, running_ev
     else:
         reader = fileinput.input(log_files)
 
-    for line in reader:  # note that fileinput will not react to running_event.clear()
-        if running_event is not None and not running_event.is_set():
-            break
+    # start pulling log files to the queue
+    for line in reader:
         try:
             parser_pool.add_line(line.strip('\n'), block=not reader.isstdin())
         except Full:
@@ -261,3 +274,38 @@ def process_log_files(log_files, concurrency=None, local_emails=None, running_ev
     parser_pool.join()
     print("Finished log parsing")
 
+
+
+def argparse_maker():
+    """
+    :return: argparse object
+    """
+    parser = argparse.ArgumentParser(description=__doc__,
+                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument("-v", "--verbose", dest="verbosity", default=0, action="count",
+                        help="-v for a little info, -vv for debugging")
+    parser.add_argument("-c", "--concurrency", dest="concurrency", default=multiprocessing.cpu_count(), type=int,
+                        metavar="threads",
+                        help="Number of threads to spawn for handling lines")
+    parser.add_argument("-l", "--local", dest="local_emails", default=[], action="append",
+                        metavar="local_emails",
+                        help="Search for STRING in incoming email addresses and incr stat NAME and if COUNT, count in incoming - STRING,NAME,COUNT")
+    parser.add_argument('log_files', metavar='file', type=str, nargs='*', default="-",
+                        help='an integer for the accumulator')
+    return parser
+
+
+def main():
+    parser = argparse_maker()
+    args = parser.parse_args()
+    assert args.verbosity is not None
+    assert args.concurrency is not None
+    assert args.local_emails is not None
+    assert args.log_files is not None
+    log_init(args.verbosity)
+
+    process(log_files=args.log_files, concurrency=args.concurrency, local_emails=args.local_emails)
+
+
+if __name__ == '__main__':
+    main()

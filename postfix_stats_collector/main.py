@@ -15,8 +15,8 @@ import logging
 from functools import partial
 import multiprocessing
 
-from qshape import process_qshape
-from logparser import process_log_files
+from qshape import process
+from logparser import process
 
 
 logger = logging.getLogger(__name__)
@@ -63,8 +63,8 @@ def processor(log_files, concurrency=2, local_emails=None, skip_qshape=False, sk
     # signal.signal(signal.SIGINT, signal_handler)
     print('Press Ctrl+C to exit')
 
-    partial_process_qshape = partial(process_qshape, qshape_run_once)
-    partial_process_log_files = partial(process_log_files, log_files, concurrency, local_emails)
+    partial_process_qshape = partial(process, qshape_run_once)
+    partial_process_log_files = partial(process, log_files, concurrency, local_emails)
     tasks = []
     if not skip_qshape:
         tasks.append(partial_process_qshape)

@@ -1,0 +1,3 @@
+#!/usr/bin/env python
+from postfix_stats_collector.logparser import main
+main()
