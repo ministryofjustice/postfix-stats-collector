@@ -16,6 +16,8 @@ Following variables can be used to manage statsd destination and namespace
 - STATSD_PORT=8125
 - STATSD_PREFIX=None
 - STATSD_MAXUDPSIZE=512
+To configure frequency of qshape measurements:
+- STATSD_DELAY=10
 
 
 TODO

@@ -6,6 +6,7 @@ STATSD_HOST=localhost
 STATSD_PORT=8125
 STATSD_PREFIX=None
 STATSD_MAXUDPSIZE=512
+STATSD_DELAY=10
 """
 
 import os
@@ -23,7 +24,7 @@ from statsd.defaults.env import statsd
 
 logger = logging.getLogger(__name__)
 
-STATSD_DELAY = int(os.environ.get("STATSD_DELAY", 1))
+STATSD_DELAY = int(os.environ.get("STATSD_DELAY", 10))
 
 QUEUES = ["maildrop",
           "hold",
