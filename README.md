@@ -18,11 +18,6 @@ Following variables can be used to manage statsd destination and namespace
 - STATSD_MAXUDPSIZE=512
 
 
-warning
--------
-It's Work In Progress!!!
-
-
 TODO
 ----
 - syslog configuraiton examples
