@@ -7,13 +7,19 @@ STATSD_PORT=8125
 STATSD_PREFIX=None
 STATSD_MAXUDPSIZE=512
 """
+
+"""
+:copyright: (c) 2012 DISQUS.
+:copyright: (c) 2015 UK Ministry of Justice
+:license: Apache License 2.0, see LICENSE-APACHE2.0 for more details.
+"""
+
 import re
 import sys
 import time
 import logging
 import fileinput
 import argparse
-import signal
 import multiprocessing
 from postfix_stats_collector.common import log_init
 from collections import defaultdict, Iterator
