@@ -55,14 +55,18 @@ def get_qshape_stats(limit_top_domains=0):
 
 
     Example output from qshape:
-                                   T  5 10 20 40 80 160 320 640 1280 2560 5120 5120+
-                            TOTAL  4  0  0  0  2  0   2   0   0    0    0    0     0
-                      example.com  6  0  0  0  2  0   2   0   0    0    0    0     2
+                                    T  5 10 20 40 80 160 320 640 1280 2560 5120 5120+
+                            TOTAL  14  1  1  0  4  0   4   0   0    0    0    0     4
+                        gmail.com   4  0  0  0  2  0   2   0   0    0    0    0     0
+                      example.com   6  0  0  0  2  0   2   0   0    0    0    0     2
+                          foo.bar   4  1  1  0  0  0   0   0   0    0    0    0     2
 
     Transformation applied:
-                                   T  5 10 20 40 80 160 320 640 1280 2560 5120
-                            TOTAL  4  4  4  4  2  2   0   0   0    0    0    0
-                      example.com  6  6  6  6  4  4   2   2   2    2    2    2
+                                    T   5 10 20 40 80 160 320 640 1280 2560 5120
+                            TOTAL  14  13 12 12  8  8   4   4   4    4    4    4
+                        gmail.com   4   4  4  4  2  2   0   0   0    0    0    0
+                      example.com   6   6  6  6  4  4   2   2   2    2    2    2
+                          foo.bar   4   3  2  2  2  2   2   2   2    2    2    2
 
     :param limit_top_domains: limit how many top domains should be reported as separate metrics (default=0)
     :return: list of stats [(key, value),...], where key is: "postfix.qshape.{queue}.{domain}.{bucket}"
